@@ -3,7 +3,7 @@ yt-dbl yi daha basit stabil ve optimize hale getirmek için bir yt-dbl aracısı
 
 kurulum
 
-    yt-tool dosyasını ~/bin/ içine at
+    cd ~/ && git clone git@github.com:berat015801/yt-tool.git && cd yt-toolkit && mkdir -p ~/bin && cp yt-tool ~/bin/yt-tool && chmod +x ~/bin/yt-tool && cd ~/
 
 bağımlılıklar
 deno/bun (bilgisayar için önerilen js runtime)
