@@ -93,13 +93,9 @@ check_disclaimer
 
 # PARAMETRELER
 SPONSOR=0; TRANST=0; LOW=0; SOUND_M4A=0; SOUND_OPUS=0; PLAY=0; LOOP=0; PLAY_SOUND=0; PLAY_VIDEO=0
-
-# PARAMETRELER
-SPONSOR=0; TRANST=0; LOW=0; SOUND_M4A=0; SOUND_OPUS=0; PLAY=0; LOOP=0; PLAY_SOUND=0; PLAY_VIDEO=0
-VOLUME="" # YENİ EKLENDİ
+VOLUME=""
+SPEED=""
 SEARCH=0; CHANNEL_SEARCH=0; CHANNEL_VIDEOS=0; CHANNEL_INFO=0; VERBOSE=0; URL=""
-HISTORY_D=0; HISTORY_P=0; HISTORY_S=0
-CACHE_MODE="auto" # auto, ram, ssd, stream
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -113,6 +109,7 @@ while [[ $# -gt 0 ]]; do
     -video)                     PLAY_VIDEO=1; shift ;;
     -loop)                      LOOP=1; shift ;;
     -vol|-volume)               VOLUME="$2"; shift 2 ;;
+    -speed)                     SPEED="$2"; shift 2 ;; 
     -cache-ram)                 CACHE_MODE="ram"; shift ;;
     -cache-ssd)                 CACHE_MODE="ssd"; shift ;;
     -cache-stream)              CACHE_MODE="stream"; shift ;;
@@ -204,9 +201,15 @@ if [[ "$PLAY" -eq 1 ]]; then
   SPON_ARGS=()
   [[ "$SPONSOR" -eq 1 ]] && SPON_ARGS=(--sponsorblock-remove "sponsor,intro,outro,selfpromo,music_offtopic,preview,filler")
   
-  # Ses seviyesi belirleme (Parametre geldiyse onu kullan, yoksa config'deki varsayılanı)
+  # Ses seviyesi belirleme
   VOL_LVL="${VOLUME:-$PLAY_VOLUME}"
   FFPLAY_ARGS=("-autoexit" "-loglevel" "error" "-window_title" "YT-Toolkit Player" "-volume" "$VOL_LVL" "-rtbufsize" "1G" "-infbuf" "-sync" "ext")
+  
+  # Eğer hız parametresi geldiyse ffplay'e video ve ses filtrelerini ekle
+  if [[ -n "${SPEED:-}" ]]; then
+    FFPLAY_ARGS+=("-vf" "setpts=PTS/$SPEED" "-af" "atempo=$SPEED")
+  fi
+
   [[ "$LOOP" -eq 1 ]] && FFPLAY_ARGS+=("-loop" "0")
   [[ "$PLAY_SOUND" -eq 1 ]] && FFPLAY_ARGS+=("-nodisp")
 
@@ -214,7 +217,7 @@ if [[ "$PLAY" -eq 1 ]]; then
 
   # AUTO MOD: Video boyutunu kontrol et, 500MB'den buyukse stream moduna gec
   if [[ "$CACHE_MODE" == "auto" ]]; then
-VID_SIZE=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" -O "%(filesize_approx)s" --skip-download "$URL" 2>/dev/null)
+    VID_SIZE=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" -O "%(filesize_approx)s" --skip-download "$URL" 2>/dev/null)
     if [[ -z "$VID_SIZE" || "$VID_SIZE" == "NA" ]]; then
       CACHE_MODE="stream" # Boyut belli degilse guvenli olan stream moduna gec
     else
