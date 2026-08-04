@@ -1,0 +1,355 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+# ==========================================
+# YAPILANDIRMA (KENDİNİZE GÖRE DÜZENLEYİN)
+# ==========================================
+OUTPUT_DIR="${YT_OUTPUT_DIR:-$HOME/videolar/youtube}"
+LOG_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/yt-toolkit"
+MAX_HEIGHT="1440"
+LOW_HEIGHT="720"
+PLAY_VOLUME="30"
+THREADS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
+# OYNATMA ÖNBELLEK AYARI (RAM_LIMIT_MB)
+# Video bu boyuttan büyükse otomatik akış (stream) moduna geçer
+RAM_LIMIT_MB=500
+# ==========================================
+
+mkdir -p "$OUTPUT_DIR" "$LOG_DIR"
+DL_LOG="$LOG_DIR/download_history.log"
+PLAY_LOG="$LOG_DIR/play_history.log"
+SEARCH_LOG="$LOG_DIR/search_history.log"
+
+# JS RUNTIME PATH OPTIMIZASYONU
+for js_dir in "$HOME/.deno/bin" "/usr/local/bin" "$HOME/.local/bin" "/usr/bin" "$HOME/.nvm/current/bin" "$HOME/.bun/bin"; do
+    if [[ -x "$js_dir/deno" || -x "$js_dir/node" || -x "$js_dir/bun" ]]; then
+        [[ ":$PATH:" != *":$js_dir:"* ]] && export PATH="$js_dir:$PATH"
+    fi
+done
+
+# BAGIMLILIKLAR
+for cmd in yt-dlp ffmpeg ffplay; do
+    command -v "$cmd" &> /dev/null || { echo "hata='$cmd' bulunamadı" >&2; exit 1; }
+done
+
+# JS RUNTIME TESPITI
+JS_RUNTIME=""
+JS_RUNTIME_ARGS=()
+for rt in deno node bun; do
+    if command -v "$rt" &> /dev/null; then
+        JS_RUNTIME="$rt"; JS_RUNTIME_ARGS=(--js-runtimes "$rt"); break
+    fi
+done
+[[ -z "$JS_RUNTIME" ]] && echo "uyarı: PO token icin JS runtime bulunamadı deno indirmeniz tavsiye edilir" >&2
+
+# ==========================================
+# YASAL UYARI VE İLK ÇALIŞTIRMA KONTROLÜ
+# ==========================================
+ACCEPT_FILE="$LOG_DIR/disclaimer_accepted"
+
+check_disclaimer() {
+  # Eğer kabul dosyası varsa hiçbir şey yapma, scripte devam et
+  if [[ -f "$ACCEPT_FILE" ]]; then
+    return 0
+  fi
+
+  # Dosya yoksa uyarıyı göster
+  cat <<'EOF'
+=================================================
+⚠️ YASAL UYARI:
+Bu araç eğitim ve kişisel kullanım amaçlıdır.
+YouTube Hizmet Şartlarını ihlal etmekten veya telif
+hakkı ihlali yapmaktan tamamen KULLANICI sorumludur.
+Geliştirici hiçbir yasal sorumluluk kabul etmez.
+=================================================
+EOF
+  
+  # Kullanıcıdan onay al
+  while true; do
+    read -r -p "Bu uyarıyı okudunuz ve kabul ediyor musunuz? (y/n): " cevap
+    case "$cevap" in
+      [Yy]* ) 
+        touch "$ACCEPT_FILE"
+        echo -e "\nKabul edildi. Aracı kullanmaya başlayabilirsiniz.\n"
+        break
+        ;;
+      [Nn]* ) 
+        echo -e "\nKabul edilmedi. Araç sonlandırılıyor."
+        exit 1
+        ;;
+      * ) 
+        echo "Lütfen 'y' (evet) veya 'n' (hayır) girin."
+        ;;
+    esac
+  done
+}
+
+# İlk kontrolü yap
+check_disclaimer
+
+# PARAMETRELER
+SPONSOR=0; TRANST=0; LOW=0; SOUND_M4A=0; SOUND_OPUS=0; PLAY=0; LOOP=0; PLAY_SOUND=0; PLAY_VIDEO=0
+
+# PARAMETRELER
+SPONSOR=0; TRANST=0; LOW=0; SOUND_M4A=0; SOUND_OPUS=0; PLAY=0; LOOP=0; PLAY_SOUND=0; PLAY_VIDEO=0
+VOLUME="" # YENİ EKLENDİ
+SEARCH=0; CHANNEL_SEARCH=0; CHANNEL_VIDEOS=0; CHANNEL_INFO=0; VERBOSE=0; URL=""
+HISTORY_D=0; HISTORY_P=0; HISTORY_S=0
+CACHE_MODE="auto" # auto, ram, ssd, stream
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -sponsor)                   SPONSOR=1; shift ;;
+    -transt)                    TRANST=1; shift ;;
+    -low)                       LOW=1; shift ;;
+    -sound-m4a)                 SOUND_M4A=1; shift ;;
+    -sound-opus)                SOUND_OPUS=1; shift ;;
+    -play)                      PLAY=1; shift ;;
+    -sound)                     PLAY_SOUND=1; shift ;;
+    -video)                     PLAY_VIDEO=1; shift ;;
+    -loop)                      LOOP=1; shift ;;
+    -vol|-volume)               VOLUME="$2"; shift 2 ;;
+    -cache-ram)                 CACHE_MODE="ram"; shift ;;
+    -cache-ssd)                 CACHE_MODE="ssd"; shift ;;
+    -cache-stream)              CACHE_MODE="stream"; shift ;;
+    -search)                    SEARCH=1; shift ;;
+    -channel-search|-csearch)   CHANNEL_SEARCH=1; shift ;;
+    -channel-videos|-chvid)     CHANNEL_VIDEOS=1; shift ;;
+    -channel-info|-chinfo)      CHANNEL_INFO=1; shift ;;
+    -history-download)          HISTORY_D=1; shift ;;
+    -history-play)              HISTORY_P=1; shift ;;
+    -history-search)            HISTORY_S=1; shift ;;
+    -verbose)                   VERBOSE=1; shift ;;
+    -h|--help)
+      cat <<'EOF'
+Kullanim: yt-toolkit [PARAMETRELER] <URL veya arama>
+
+VIDEO       : -sponsor -transt -low -sound-m4a -sound-opus
+OYNATMA     : -play -loop -sound (sadece ses) -video (sadece goruntu) -vol <0-100> (ses seviyesi)
+ONBELLEK    : -cache-ram (tümünü RAM'e indir) -cache-ssd (SSD'ye indir) -cache-stream (sürekli akış)
+ARAMA       : -search (video) -csearch (kanal) -chvid (kanal video) -chinfo (kanal bilgi)
+GECMIS      : -history-download -history-play -history-search
+DIGER       : -verbose
+EOF
+      exit 0 ;;
+    --)            shift; URL="$*"; break ;;
+    -*)            echo "bilinmeyen parametre $1" >&2; exit 1 ;;
+    *)             URL="${URL:+$URL }$1"; shift ;;
+  esac
+done
+
+# GECMIS GORUNTULEME KOMUTLARI
+if [[ "$HISTORY_D" -eq 1 ]]; then cat "$DL_LOG" 2>/dev/null || echo "indirme geçmisi bos"; exit 0; fi
+if [[ "$HISTORY_P" -eq 1 ]]; then cat "$PLAY_LOG" 2>/dev/null || echo "oynatma geçmisi bos"; exit 0; fi
+if [[ "$HISTORY_S" -eq 1 ]]; then cat "$SEARCH_LOG" 2>/dev/null || echo "arama geçmisi bos"; exit 0; fi
+
+[[ -z "${URL:-}" ]] && { echo "hata=video kodu girilmedi." >&2; exit 1; }
+
+# FONKSIYONLAR
+clean_url() { sed -E 's/[?&](si|feature|ab_channel|pp|source)=[^&]*//g; s/[?&]$//g' <<< "$1"; }
+URL=$(clean_url "$URL")
+
+# KANAL ARAMA MODU
+if [[ "$CHANNEL_SEARCH" -eq 1 ]]; then
+  echo "[YT-TOOLKIT] kanal arama sonucları:\n"
+  yt-dlp "${JS_RUNTIME_ARGS[@]}" --flat-playlist --print "%(playlist_index)s. %(channel)s | %(id)s | %(url)s" "ytsearchchannel10:$URL" 2>/dev/null || { echo "Hata: Kanal arama basarisiz." >&2; exit 1; }
+  exit 0
+fi
+
+# KANAL BILGISI MODU
+if [[ "$CHANNEL_INFO" -eq 1 ]]; then
+  echo "[YT-TOOLKIT] kanal bilgisi alınıyor\n"
+  [[ "$URL" != http* ]] && URL="https://youtube.com/$URL"
+  yt-dlp "${JS_RUNTIME_ARGS[@]}" --skip-download --print "Kanal: %(channel)s\nID: %(channel_id)s\nAbone: %(channel_follower_count)s\nVideo: %(playlist_count)s\nURL: %(channel_url)s" "$URL" 2>/dev/null || { echo "Hata: Kanal bilgisi alinamadi." >&2; exit 1; }
+  exit 0
+fi
+
+# KANAL VIDEOLARI MODU
+if [[ "$CHANNEL_VIDEOS" -eq 1 ]]; then
+  echo "[YT-TOOLKIT] kanal videoları listesi\n"
+  if [[ "$URL" != http* ]]; then
+    [[ "$URL" != @* ]] && URL="@$URL"
+    URL="https://youtube.com/$URL"
+  fi
+  yt-dlp "${JS_RUNTIME_ARGS[@]}" --flat-playlist --playlist-end 30 --print "%(playlist_index)s. %(title)s | %(duration_string)s | %(id)s | %(upload_date>%Y-%m-%d)s" "$URL/videos" 2>/dev/null || { echo "Hata: Videolar alinamadi." >&2; exit 1; }
+  exit 0
+fi
+
+# VIDEO ARAMA MODU
+if [[ "$SEARCH" -eq 1 ]]; then
+  echo "[YT-TOOLKIT] arama sonucları:\n"
+  yt-dlp "${JS_RUNTIME_ARGS[@]}" -s --print "%(playlist_index)s. %(title)s | %(duration_string)s | %(channel)s | %(id)s" "ytsearch10:$URL"
+  echo "$(date '+%Y-%m-%d %H:%M') - arama: $URL" >> "$SEARCH_LOG"
+  exit 0
+fi
+
+# ==========================================
+# ANLIK OYNATMA MODU (AKILLI ONBELLEK)
+# ==========================================
+if [[ "$PLAY" -eq 1 ]]; then
+  echo "[YT-TOOLKIT] video hazırlanıyor"
+  
+  if [[ "$PLAY_SOUND" -eq 1 ]]; then
+    PLAY_FORMAT="bestaudio/best"
+  elif [[ "$PLAY_VIDEO" -eq 1 ]]; then
+    PLAY_FORMAT="bestvideo[vcodec^=avc1][height<=$MAX_HEIGHT]/best"
+  else
+    PLAY_FORMAT="bestvideo[vcodec^=avc1][height<=$MAX_HEIGHT]+bestaudio/best[vcodec^=avc1][height<=$MAX_HEIGHT]/best"
+  fi
+
+  SPON_ARGS=()
+  [[ "$SPONSOR" -eq 1 ]] && SPON_ARGS=(--sponsorblock-remove "sponsor,intro,outro,selfpromo,music_offtopic,preview,filler")
+  
+  # Ses seviyesi belirleme (Parametre geldiyse onu kullan, yoksa config'deki varsayılanı)
+  VOL_LVL="${VOLUME:-$PLAY_VOLUME}"
+  FFPLAY_ARGS=("-autoexit" "-loglevel" "error" "-window_title" "YT-Toolkit Player" "-volume" "$VOL_LVL" "-rtbufsize" "1G" "-infbuf" "-sync" "ext")
+  [[ "$LOOP" -eq 1 ]] && FFPLAY_ARGS+=("-loop" "0")
+  [[ "$PLAY_SOUND" -eq 1 ]] && FFPLAY_ARGS+=("-nodisp")
+
+  echo "$(date '+%Y-%m-%d %H:%M') - Oynatma: $URL" >> "$PLAY_LOG"
+
+  # AUTO MOD: Video boyutunu kontrol et, 500MB'den buyukse stream moduna gec
+  if [[ "$CACHE_MODE" == "auto" ]]; then
+VID_SIZE=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" -O "%(filesize_approx)s" --skip-download "$URL" 2>/dev/null)
+    if [[ -z "$VID_SIZE" || "$VID_SIZE" == "NA" ]]; then
+      CACHE_MODE="stream" # Boyut belli degilse guvenli olan stream moduna gec
+    else
+      VID_SIZE_MB=$((VID_SIZE / 1024 / 1024))
+      if [[ "$VID_SIZE_MB" -gt "$RAM_LIMIT_MB" ]]; then
+        CACHE_MODE="stream"
+      else
+        CACHE_MODE="ram"
+      fi
+    fi
+  fi
+
+  # AKIŞ (STREAM) MODU
+  # Boru hattı ile gerçek zamanlı dinamil tampon. Disk yormaz, RAM'i az kullanır.
+  if [[ "$CACHE_MODE" == "stream" ]]; then
+    echo "[YT-TOOLKIT] stream başladı"
+    PLAY_ARGS=(-f "$PLAY_FORMAT" -N 4 --http-chunk-size 10M --no-post-overwrites -o - "${JS_RUNTIME_ARGS[@]}")
+    [[ "$PLAY_SOUND" -eq 0 && "$PLAY_VIDEO" -eq 0 ]] && PLAY_ARGS+=(--merge-output-format mkv)
+    PLAY_ARGS+=("${SPON_ARGS[@]}")
+    
+    yt-dlp "${PLAY_ARGS[@]}" "$URL" 2>/dev/null | ffmpeg -re -i - -c copy -f matroska - 2>/dev/null | ffplay "${FFPLAY_ARGS[@]}" -
+
+  # RAM veya SSD MODU (Tümünü indir, sonra oynat)
+  else
+    if [[ "$CACHE_MODE" == "ram" ]]; then
+      # /dev/shm'deki boş alanı MB cinsinden al
+      SHM_FREE_MB=$(df -m /dev/shm 2>/dev/null | awk 'NR==2 {print $4}')
+      if [[ -z "$SHM_FREE_MB" || "$SHM_FREE_MB" -lt "$RAM_LIMIT_MB" ]]; then
+        echo "[YT-TOOLKIT] RAM'de yeterli alan yok, SSD'ye (/tmp) geçiliyor."
+        CACHE_MODE="ssd"
+      else
+        TEMP_DIR="/dev/shm"
+        echo "[YT-TOOLKIT] ram'e indiriliyor"
+      fi
+    fi
+
+    if [[ "$CACHE_MODE" == "ssd" ]]; then
+      TEMP_DIR="/tmp"
+      echo "[YT-TOOLKIT] tümü ssd'ye (/tmp) indiriliyor"
+    fi
+    
+    [[ ! -d "$TEMP_DIR" ]] && TEMP_DIR="/tmp"
+
+    VID_ID=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" --print "%(id)s" --skip-download "$URL" 2>/dev/null)
+    [[ -z "$VID_ID" ]] && VID_ID="temp_video"
+    
+    TEMP_FILE="$TEMP_DIR/yt-toolkit_${VID_ID}.mkv"
+    
+    cleanup() {
+      rm -f "$TEMP_FILE"
+      echo "[YT-TOOLKIT] video alandan silindi ($TEMP_DIR)."
+      exit
+    }
+    trap cleanup INT TERM EXIT
+    
+    PLAY_ARGS=(-f "$PLAY_FORMAT" --merge-output-format mkv "${SPON_ARGS[@]}" -o "$TEMP_FILE" "$URL")
+    yt-dlp "${PLAY_ARGS[@]}" 2>/dev/null
+    
+    if [[ ! -f "$TEMP_FILE" ]]; then
+      echo "hata=video indirilemedi" >&2
+      exit 1
+    fi
+    
+    echo "[YT-TOOLKIT] başladı"
+    ffplay "${FFPLAY_ARGS[@]}" "$TEMP_FILE"
+  fi
+  
+  exit 0
+fi
+
+# ==========================================
+# INDIRME MODU
+# ==========================================
+if [[ "$VERBOSE" -eq 1 ]]; then
+  ARGS=(-v --progress --console-title -N "$THREADS")
+else
+  ARGS=(--progress --console-title -N "$THREADS" --no-warnings)
+fi
+ARGS+=("${JS_RUNTIME_ARGS[@]}")
+
+[[ "$SPONSOR" -eq 1 ]] && ARGS+=(--sponsorblock-remove "sponsor,intro,outro,selfpromo,music_offtopic,preview,filler")
+
+# ALTYAZI
+if [[ "$TRANST" -eq 1 ]]; then
+  ARGS+=(--write-auto-subs --sub-langs "tr,en" --embed-subs)
+elif [[ "$SOUND_M4A" -eq 0 && "$SOUND_OPUS" -eq 0 ]]; then
+  [[ "$VERBOSE" -eq 1 ]] && echo "[YT-TOOLKIT] Video dili kontrol ediliyor..."
+  VID_LANG=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" --print "%(language)s" --skip-download "$URL" 2>/dev/null || true)
+  VID_LANG=${VID_LANG:-unknown}
+  
+  if [[ "$VID_LANG" != "tr" && "$VID_LANG" != "tur" && "$VID_LANG" != "unknown" ]]; then
+    [[ "$VERBOSE" -eq 1 ]] && echo "[YT-TOOLKIT] Dil Turkce degil ($VID_LANG). EN altyazi indiriliyor..."
+    ARGS+=(--write-subs --sub-langs "en" --embed-subs)
+  fi
+fi
+
+# FORMAT SECIMI
+if [[ "$SOUND_M4A" -eq 1 ]]; then
+  ARGS+=(-f bestaudio --extract-audio --audio-format m4a --postprocessor-args "ffmpeg:-b:a 96k")
+elif [[ "$SOUND_OPUS" -eq 1 ]]; then
+  ARGS+=(-f bestaudio --extract-audio --audio-format opus --audio-quality 64k)
+elif [[ "$LOW" -eq 1 ]]; then
+  ARGS+=(-f "bestvideo[height<=$LOW_HEIGHT][fps<=30]+bestaudio/best[height<=$LOW_HEIGHT]/best")
+else
+  ARGS+=(-f "bestvideo[height<=$MAX_HEIGHT]+bestaudio/best[height<=$MAX_HEIGHT]/best")
+fi
+
+# KODLAMA AYARLARI
+if [[ "$SOUND_M4A" -eq 0 && "$SOUND_OPUS" -eq 0 ]]; then
+  if [[ "$LOW" -eq 1 ]]; then
+    ARGS+=(--recode-video mp4 --postprocessor-args "ffmpeg:-c:v libx264 -crf 26 -preset fast -threads $THREADS -vf scale=min($LOW_HEIGHT,iw):-2,fps=30 -c:a aac -b:a 96k -ac 2 -ar 48000 -movflags +faststart")
+  else
+    ARGS+=(--recode-video mp4 --postprocessor-args "ffmpeg:-c:v libx264 -crf 23 -preset fast -threads $THREADS -vf scale=min($MAX_HEIGHT,iw):-2 -c:a aac -b:a 128k -ac 2 -ar 48000 -movflags +faststart")
+  fi
+fi
+
+# DOSYA ISIMLENDIRME VE DUPLICATE KONTROLU
+VID_ID=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" --print "%(id)s" --skip-download "$URL" 2>/dev/null)
+if [[ -n "$VID_ID" ]]; then
+  for old_file in "$OUTPUT_DIR"/*"$VID_ID"*; do
+    if [[ -f "$old_file" ]]; then
+      base_name="${old_file%.*}"
+      ext="${old_file##*.}"
+      if [[ "$base_name" != *"_v"* ]]; then
+        mv "$old_file" "${base_name}_vESKI_KALITE.${ext}" 2>/dev/null
+      fi
+    fi
+  done
+fi
+
+ARGS+=(-o "$OUTPUT_DIR/%(title)s [%(id)s]_v%(height)sp_%(vcodec)s.%(ext)s")
+
+[[ "$VERBOSE" -eq 1 ]] && { printf "[YT-TOOLKIT] Argumanlar:\n%s\n\n" "'${ARGS[*]}'"; }
+
+# CALISTIRMA VE LOG
+if yt-dlp "${ARGS[@]}" "$URL"; then
+  echo "[YT-TOOLKIT] tamamlandi."
+  echo "$(date '+%Y-%m-%d %H:%M') - indirildi $URL" >> "$DL_LOG"
+else
+  echo "[YT-TOOLKIT] hata var" >&2; exit 1
+fi
