@@ -1,7 +1,9 @@
 # yt-tool
 yt-dbl yi daha basit stabil ve optimize hale getirmek için bir yt-dbl aracısı
 
+kurulum
 
+    yt-tool dosyasını ~/bin/ içine at
 
 bağımlılıklar
 deno/bun (bilgisayar için önerilen js runtime)
@@ -38,7 +40,7 @@ script kullanım kolaylığı için parametreleri kategorilere ayırır istediğ
     -sound-m4a     : sadece sesi çeker ve M4A (AAC 96k) formatına dönüştürür
     -sound-opus    : sadece sesi çeker ve opus (64k VBR) formatında kaydeder
 
-▶️ Anlık Oynatma (Oynatıcı: ffplay)
+Anlık Oynatma (Oynatıcı: ffplay)
 
     -play          : videoyu indirmeden anlık olarak oynatır
     -loop          : videoyu sürekli döngüde (tekrar tekrar) oynatır
