@@ -38,10 +38,13 @@ JS_RUNTIME=""
 JS_RUNTIME_ARGS=()
 for rt in deno node bun; do
     if command -v "$rt" &> /dev/null; then
-        JS_RUNTIME="$rt"; JS_RUNTIME_ARGS=(--js-runtimes "$rt"); break
+        JS_RUNTIME="$rt"
+        RT_PATH=$(command -v "$rt")
+        # yt-dlp'ye runtime'ın tam dizin yolunu veriyoruz (örn: deno:/home/linus/.deno/bin/deno)
+        JS_RUNTIME_ARGS=(--js-runtimes "$rt:$RT_PATH")
+        break
     fi
 done
-[[ -z "$JS_RUNTIME" ]] && echo "uyarı: PO token icin JS runtime bulunamadı deno indirmeniz tavsiye edilir" >&2
 
 # ==========================================
 # YASAL UYARI VE İLK ÇALIŞTIRMA KONTROLÜ
