@@ -233,7 +233,7 @@ if [[ "$PLAY" -eq 1 ]]; then
   # AKIŞ (STREAM) MODU
   if [[ "$CACHE_MODE" == "stream" ]]; then
     echo "[YT-TOOLKIT] stream başladı"
-    PLAY_ARGS=(-f "$PLAY_FORMAT" -N 4 --http-chunk-size 10M --no-post-overwrites -o - "${JS_RUNTIME_ARGS[@]}")
+    PLAY_ARGS=(-f "$PLAY_FORMAT" -N 4 --http-chunk-size 10M --no-post-overwrites -o - "${JS_RUNTIME_ARGS[@]}" --cookies-from-browser firefox)
     [[ "$PLAY_SOUND" -eq 0 && "$PLAY_VIDEO" -eq 0 ]] && PLAY_ARGS+=(--merge-output-format mkv)
     PLAY_ARGS+=("${SPON_ARGS[@]}")
     
@@ -275,7 +275,7 @@ if [[ "$PLAY" -eq 1 ]]; then
     }
     trap cleanup INT TERM EXIT
     
-    PLAY_ARGS=(-f "$PLAY_FORMAT" --merge-output-format mkv "${SPON_ARGS[@]}" "${JS_RUNTIME_ARGS[@]}" -o "$TEMP_FILE" "$URL")
+    PLAY_ARGS=(-f "$PLAY_FORMAT" --merge-output-format mkv "${SPON_ARGS[@]}" "${JS_RUNTIME_ARGS[@]}" --cookies-from-browser firefox -o "$TEMP_FILE" "$URL")
     yt-dlp "${PLAY_ARGS[@]}"
     
     if [[ ! -f "$TEMP_FILE" ]]; then

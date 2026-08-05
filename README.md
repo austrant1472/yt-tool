@@ -15,19 +15,34 @@ yt-dlb
 
 optimizasyon ve stabilite algoritmaları
 
-    önbellek karar matrisi (Smart Cache): video oynatılmadan önce parametrelerde belirtilmedikçe varsayılan olarak video boyutu sorgulanır eğer video 500 MB'nin altındaysa RAM'e (/dev/shm) indirilip oynatılır bitince RAM'den otomatik silinir eğer video 500 MB'nin üstündeyse diski yormamak için dinamik akış (stream/pipe) moduna geçer
+    önbellek karar matrisi (Smart Cache): video oynatılmadan önce parametrelerde belirtilmedikçe varsayılan olarak video 
+    boyutu sorgulanır eğer video 500 MB'nin altındaysa RAM'e (/dev/shm) indirilip oynatılır bitince RAM'den otomatik silinir
+    eğer video 500 MB'nin üstündeyse diski yormamak için dinamik akış (stream/pipe) moduna geçer
 
-    gerçek zamanlı valf senkronizasyonu: pipe akışında internet hızı video izleme hızını geçerse ffplay videoyu hızlı oynatır bunu çözmek için script araya ffmpeg -re valfini koyarak verinin tam 1x (gerçek zamanlı akmasını sağlar ses ve görüntü senkronizasyonunu korur
+    gerçek zamanlı valf senkronizasyonu: pipe akışında internet hızı video izleme hızını geçerse ffplay videoyu hızlı oynatır
+    bunu çözmek için script araya ffmpeg -re valfini koyarak verinin tam 1x (gerçek zamanlı akmasını sağlar ses ve görüntü
+    senkronizasyonunu korur
 
-    dil tabanlı altyazı tahmini: video indirilirken dili kontrol edilir eğer video türkçe ise altyazı indirilmez türkçe değilse İngilizce altyazı çekilip videoya gömülür
+    dil tabanlı altyazı tahmini: video indirilirken dili kontrol edilir eğer video türkçe ise altyazı indirilmez türkçe
+    değilse İngilizce altyazı çekilip videoya gömülür
 
-    codec seçimi: kaynakları verimli kullanmak için youtube dan AV1 yerine her zaman H.264 (avc1) codex talep edilir bu sayede oynatma sırasında donma ve yüksek işlemci/ekran kartı kullanımı önlenir
+    codec seçimi: kaynakları verimli kullanmak için youtube dan AV1 yerine her zaman H.264 (avc1) codex talep edilir bu 
+    sayede oynatma sırasında donma ve yüksek işlemci/ekran kartı kullanımı önlenir
 
-    sürümlü dosya çakışma yönetimi: yt-dlp aynı videoyu farklı kalitelerde indirdiğinde üstüne yazar ya da hata verir yt-tool indirmeden önce klasörü tarar eğer aynı video ismine sahip bir dosya varsa onu silmek yerine adının sonuna _vESKI_KALITE ekler ve yeni dosyayı _v720p_avc1 gibi kalite bilgisiyle kaydeder böylece aynı videonun 720p ve 1080p versiyonları yan yana durabilir
+    sürümlü dosya çakışma yönetimi: yt-dlp aynı videoyu farklı kalitelerde indirdiğinde üstüne yazar ya da hata verir yt-tool 
+    indirmeden önce klasörü tarar eğer aynı video ismine sahip bir dosya varsa onu silmek yerine adının sonuna _vESKI_KALITE 
+    ekler ve yeni dosyayı _v720p_avc1 gibi kalite bilgisiyle kaydeder böylece aynı videonun 720p ve 1080p versiyonları yan 
+    yana durabilir
 
-    dinamik PATH ve runtime enjeksiyonu: yt-dlp deno veya nodejs kurulsa bile bazen terminalin PATH ayarlarından dolayı onları bulamaz script her çalıştığında sistemdeki olası tüm gizli yolları ($HOME/.deno/bin, $HOME/.nvm/current/bin vb.) tarar JS runtime ı bulursa kendi oturumu için geçici olarak PATH değişkenine ekler ve --js-runtimes parametresiyle yt-dlp'ye tanıtır kullanıcı hiçbir ekstra ayar yapmadan PO Token sorunu çözülür
+    dinamik PATH ve runtime enjeksiyonu: yt-dlp deno veya nodejs kurulsa bile bazen terminalin PATH ayarlarından dolayı
+    onları bulamaz script her çalıştığında sistemdeki olası tüm gizli yolları ($HOME/.deno/bin, $HOME/.nvm/current/bin vb.) 
+    tarar JS runtime ı bulursa kendi oturumu için geçici olarak PATH değişkenine ekler ve --js-runtimes parametresiyle
+    yt-dlp'ye tanıtır kullanıcı hiçbir ekstra ayar yapmadan PO Token sorunu çözülür
 
-    platforma özel istemci manuplasyonu (termux/android): termux üzerinde yt-dlp çalıştığında youtube android vr API ını kullanır ve çoğu zaman kilitlenir script termux ortamını algılar ve youtube a --extractor-args "youtube:player_client=tv,android" paketini göndererek VR değil bir android TV taklidi yapar bu sayede youtube un en az kısıtlamalı (PO Token gerektirmeyen) API ını kullanılarak indirme tamamlanır
+    platforma özel istemci manuplasyonu (termux/android): termux üzerinde yt-dlp çalıştığında youtube android vr API ını 
+    kullanır ve çoğu zaman kilitlenir script termux ortamını algılar ve youtube a --extractor-args 
+    "youtube:player_client=tv,android" paketini göndererek VR değil bir android TV taklidi yapar bu sayede youtube un en az 
+    kısıtlamalı (PO Token gerektirmeyen) API ını kullanılarak indirme tamamlanır
 
  kullanım ve parametreler
 
@@ -77,4 +92,7 @@ kılavuz
 
 Yasal Uyarı
 
-Bu araç ilk çalıştığında kullanıcıdan yasal uyarıyı kabul etmesini ister ve bu onay ~/.local/share/yt-toolkit/disclaimer_accepted dosyasına kaydedilir. Bu araç eğitim ve kişisel kullanım amaçlıdır. YouTube Hizmet Şartlarını ihlal etmekten veya telif hakkı ihlali yapmaktan tamamen KULLANICI sorumludur. Geliştirici hiçbir yasal sorumluluk kabul etmez.
+Bu araç ilk çalıştığında kullanıcıdan yasal uyarıyı kabul etmesini ister ve bu onay 
+~/.local/share/yt-toolkit/disclaimer_accepted dosyasına kaydedilir. Bu araç eğitim ve kişisel kullanım amaçlıdır.
+YouTube Hizmet Şartlarını ihlal etmekten veya telif hakkı ihlali yapmaktan tamamen KULLANICI sorumludur.
+Geliştirici hiçbir yasal sorumluluk kabul etmez.
