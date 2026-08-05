@@ -31,8 +31,8 @@ optimizasyon ve stabilite algoritmaları
 
     sürümlü dosya çakışma yönetimi: yt-dlp aynı videoyu farklı kalitelerde indirdiğinde üstüne yazar ya da hata verir yt-tool 
     indirmeden önce klasörü tarar eğer aynı video ismine sahip bir dosya varsa onu silmek yerine adının sonuna _vESKI_KALITE 
-    ekler ve yeni dosyayı _v720p_avc1 gibi kalite bilgisiyle kaydeder böylece aynı videonun 720p ve 1080p versiyonları yan 
-    yana durabilir
+    ekler ve yeni dosyayı _v720p_avc1 gibi kalite bilgisiyle kaydeder böylece aynı videonun 720p ve 1080p versiyonları aynı
+    klasörde durabilir
 
     dinamik PATH ve runtime enjeksiyonu: yt-dlp deno veya nodejs kurulsa bile bazen terminalin PATH ayarlarından dolayı
     onları bulamaz script her çalıştığında sistemdeki olası tüm gizli yolları ($HOME/.deno/bin, $HOME/.nvm/current/bin vb.) 
