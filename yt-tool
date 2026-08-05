@@ -14,7 +14,6 @@ THREADS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 # OYNATMA ÖNBELLEK AYARI (RAM_LIMIT_MB)
 # Video bu boyuttan büyükse otomatik akış (stream) moduna geçer
 RAM_LIMIT_MB=500
-# ==========================================
 
 mkdir -p "$OUTPUT_DIR" "$LOG_DIR"
 DL_LOG="$LOG_DIR/download_history.log"
@@ -40,11 +39,11 @@ for rt in deno node bun; do
     if command -v "$rt" &> /dev/null; then
         JS_RUNTIME="$rt"
         RT_PATH=$(command -v "$rt")
-        # yt-dlp'ye runtime'ın tam dizin yolunu veriyoruz (örn: deno:/home/linus/.deno/bin/deno)
         JS_RUNTIME_ARGS=(--js-runtimes "$rt:$RT_PATH")
         break
     fi
 done
+[[ -z "$JS_RUNTIME" ]] && echo "uyarı: PO token icin JS runtime bulunamadı deno indirmeniz tavsiye edilir" >&2
 
 # ==========================================
 # YASAL UYARI VE İLK ÇALIŞTIRMA KONTROLÜ
@@ -52,15 +51,13 @@ done
 ACCEPT_FILE="$LOG_DIR/disclaimer_accepted"
 
 check_disclaimer() {
-  # Eğer kabul dosyası varsa hiçbir şey yapma, scripte devam et
   if [[ -f "$ACCEPT_FILE" ]]; then
     return 0
   fi
 
-  # Dosya yoksa uyarıyı göster
   cat <<'EOF'
 =================================================
-⚠️ YASAL UYARI:
+ YASAL UYARI:
 Bu araç eğitim ve kişisel kullanım amaçlıdır.
 YouTube Hizmet Şartlarını ihlal etmekten veya telif
 hakkı ihlali yapmaktan tamamen KULLANICI sorumludur.
@@ -68,7 +65,6 @@ Geliştirici hiçbir yasal sorumluluk kabul etmez.
 =================================================
 EOF
   
-  # Kullanıcıdan onay al
   while true; do
     read -r -p "Bu uyarıyı okudunuz ve kabul ediyor musunuz? (y/n): " cevap
     case "$cevap" in
@@ -88,14 +84,17 @@ EOF
   done
 }
 
-# İlk kontrolü yap
 check_disclaimer
 
+# ==========================================
 # PARAMETRELER
+# ==========================================
 SPONSOR=0; TRANST=0; LOW=0; SOUND_M4A=0; SOUND_OPUS=0; PLAY=0; LOOP=0; PLAY_SOUND=0; PLAY_VIDEO=0
 VOLUME=""
 SPEED=""
 SEARCH=0; CHANNEL_SEARCH=0; CHANNEL_VIDEOS=0; CHANNEL_INFO=0; VERBOSE=0; URL=""
+HISTORY_D=0; HISTORY_P=0; HISTORY_S=0
+CACHE_MODE="auto" # auto, ram, ssd, stream
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -109,7 +108,8 @@ while [[ $# -gt 0 ]]; do
     -video)                     PLAY_VIDEO=1; shift ;;
     -loop)                      LOOP=1; shift ;;
     -vol|-volume)               VOLUME="$2"; shift 2 ;;
-    -speed)                     SPEED="$2"; shift 2 ;; 
+    -speed)                     SPEED="$2"; shift 2 ;;
+    -pipe)                      CACHE_MODE="stream"; shift ;;
     -cache-ram)                 CACHE_MODE="ram"; shift ;;
     -cache-ssd)                 CACHE_MODE="ssd"; shift ;;
     -cache-stream)              CACHE_MODE="stream"; shift ;;
@@ -126,8 +126,8 @@ while [[ $# -gt 0 ]]; do
 Kullanim: yt-toolkit [PARAMETRELER] <URL veya arama>
 
 VIDEO       : -sponsor -transt -low -sound-m4a -sound-opus
-OYNATMA     : -play -loop -sound (sadece ses) -video (sadece goruntu) -vol <0-100> (ses seviyesi)
-ONBELLEK    : -cache-ram (tümünü RAM'e indir) -cache-ssd (SSD'ye indir) -cache-stream (sürekli akış)
+OYNATMA     : -play -loop -sound (sadece ses) -video (sadece goruntu) -vol <0-100> -speed <0.2-3.0>
+ONBELLEK    : -pipe (direkt akış) -cache-ram (tümünü RAM'e indir) -cache-ssd (SSD'ye indir) -cache-stream (sürekli akış)
 ARAMA       : -search (video) -csearch (kanal) -chvid (kanal video) -chinfo (kanal bilgi)
 GECMIS      : -history-download -history-play -history-search
 DIGER       : -verbose
@@ -139,7 +139,7 @@ EOF
   esac
 done
 
-# GECMIS GORUNTULEME KOMUTLARI
+# GECMIS GORUNTULEME
 if [[ "$HISTORY_D" -eq 1 ]]; then cat "$DL_LOG" 2>/dev/null || echo "indirme geçmisi bos"; exit 0; fi
 if [[ "$HISTORY_P" -eq 1 ]]; then cat "$PLAY_LOG" 2>/dev/null || echo "oynatma geçmisi bos"; exit 0; fi
 if [[ "$HISTORY_S" -eq 1 ]]; then cat "$SEARCH_LOG" 2>/dev/null || echo "arama geçmisi bos"; exit 0; fi
@@ -150,14 +150,14 @@ if [[ "$HISTORY_S" -eq 1 ]]; then cat "$SEARCH_LOG" 2>/dev/null || echo "arama g
 clean_url() { sed -E 's/[?&](si|feature|ab_channel|pp|source)=[^&]*//g; s/[?&]$//g' <<< "$1"; }
 URL=$(clean_url "$URL")
 
-# KANAL ARAMA MODU
+# KANAL ARAMA
 if [[ "$CHANNEL_SEARCH" -eq 1 ]]; then
   echo "[YT-TOOLKIT] kanal arama sonucları:\n"
   yt-dlp "${JS_RUNTIME_ARGS[@]}" --flat-playlist --print "%(playlist_index)s. %(channel)s | %(id)s | %(url)s" "ytsearchchannel10:$URL" 2>/dev/null || { echo "Hata: Kanal arama basarisiz." >&2; exit 1; }
   exit 0
 fi
 
-# KANAL BILGISI MODU
+# KANAL BILGISI
 if [[ "$CHANNEL_INFO" -eq 1 ]]; then
   echo "[YT-TOOLKIT] kanal bilgisi alınıyor\n"
   [[ "$URL" != http* ]] && URL="https://youtube.com/$URL"
@@ -165,7 +165,7 @@ if [[ "$CHANNEL_INFO" -eq 1 ]]; then
   exit 0
 fi
 
-# KANAL VIDEOLARI MODU
+# KANAL VIDEOLARI
 if [[ "$CHANNEL_VIDEOS" -eq 1 ]]; then
   echo "[YT-TOOLKIT] kanal videoları listesi\n"
   if [[ "$URL" != http* ]]; then
@@ -176,7 +176,7 @@ if [[ "$CHANNEL_VIDEOS" -eq 1 ]]; then
   exit 0
 fi
 
-# VIDEO ARAMA MODU
+# VIDEO ARAMA
 if [[ "$SEARCH" -eq 1 ]]; then
   echo "[YT-TOOLKIT] arama sonucları:\n"
   yt-dlp "${JS_RUNTIME_ARGS[@]}" -s --print "%(playlist_index)s. %(title)s | %(duration_string)s | %(channel)s | %(id)s" "ytsearch10:$URL"
@@ -201,13 +201,13 @@ if [[ "$PLAY" -eq 1 ]]; then
   SPON_ARGS=()
   [[ "$SPONSOR" -eq 1 ]] && SPON_ARGS=(--sponsorblock-remove "sponsor,intro,outro,selfpromo,music_offtopic,preview,filler")
   
-  # Ses seviyesi belirleme
+  # Ses seviyesi
   VOL_LVL="${VOLUME:-$PLAY_VOLUME}"
   FFPLAY_ARGS=("-autoexit" "-loglevel" "error" "-window_title" "YT-Toolkit Player" "-volume" "$VOL_LVL" "-rtbufsize" "1G" "-infbuf" "-sync" "ext")
   
-  # Eğer hız parametresi geldiyse ffplay'e video ve ses filtrelerini ekle
-  if [[ -n "${SPEED:-}" ]]; then
-    FFPLAY_ARGS+=("-vf" "setpts=PTS/$SPEED" "-af" "atempo=$SPEED")
+  if [[ -n "${SPEED:-}" ]] && [[ "$CACHE_MODE" != "stream" ]]; then
+    ATEMPO="rubberband=tempo=$SPEED:formant=preserved"
+    FFPLAY_ARGS+=("-vf" "setpts=PTS/$SPEED" "-af" "$ATEMPO")
   fi
 
   [[ "$LOOP" -eq 1 ]] && FFPLAY_ARGS+=("-loop" "0")
@@ -215,11 +215,11 @@ if [[ "$PLAY" -eq 1 ]]; then
 
   echo "$(date '+%Y-%m-%d %H:%M') - Oynatma: $URL" >> "$PLAY_LOG"
 
-  # AUTO MOD: Video boyutunu kontrol et, 500MB'den buyukse stream moduna gec
+  # AUTO MOD
   if [[ "$CACHE_MODE" == "auto" ]]; then
     VID_SIZE=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" -O "%(filesize_approx)s" --skip-download "$URL" 2>/dev/null)
     if [[ -z "$VID_SIZE" || "$VID_SIZE" == "NA" ]]; then
-      CACHE_MODE="stream" # Boyut belli degilse guvenli olan stream moduna gec
+      CACHE_MODE="stream"
     else
       VID_SIZE_MB=$((VID_SIZE / 1024 / 1024))
       if [[ "$VID_SIZE_MB" -gt "$RAM_LIMIT_MB" ]]; then
@@ -231,19 +231,21 @@ if [[ "$PLAY" -eq 1 ]]; then
   fi
 
   # AKIŞ (STREAM) MODU
-  # Boru hattı ile gerçek zamanlı dinamil tampon. Disk yormaz, RAM'i az kullanır.
   if [[ "$CACHE_MODE" == "stream" ]]; then
     echo "[YT-TOOLKIT] stream başladı"
     PLAY_ARGS=(-f "$PLAY_FORMAT" -N 4 --http-chunk-size 10M --no-post-overwrites -o - "${JS_RUNTIME_ARGS[@]}")
     [[ "$PLAY_SOUND" -eq 0 && "$PLAY_VIDEO" -eq 0 ]] && PLAY_ARGS+=(--merge-output-format mkv)
     PLAY_ARGS+=("${SPON_ARGS[@]}")
     
-    yt-dlp "${PLAY_ARGS[@]}" "$URL" 2>/dev/null | ffmpeg -re -i - -c copy -f matroska - 2>/dev/null | ffplay "${FFPLAY_ARGS[@]}" -
+    if [[ -n "${SPEED:-}" ]]; then
+      ATEMPO="rubberband=tempo=$SPEED:highquality=1:formant=preserved"
+      yt-dlp "${PLAY_ARGS[@]}" "$URL" 2>/dev/null | ffmpeg -i - -vf "setpts=PTS/$SPEED" -af "$ATEMPO" -c:v libx264 -preset ultrafast -tune zerolatency -c:a aac -b:a 128k -ar 48000 -f matroska - 2>/dev/null | ffplay "${FFPLAY_ARGS[@]}" -
+    else
+      yt-dlp "${PLAY_ARGS[@]}" "$URL" 2>/dev/null | ffmpeg -re -i - -c copy -f matroska - 2>/dev/null | ffplay "${FFPLAY_ARGS[@]}" -
+    fi
 
-  # RAM veya SSD MODU (Tümünü indir, sonra oynat)
   else
     if [[ "$CACHE_MODE" == "ram" ]]; then
-      # /dev/shm'deki boş alanı MB cinsinden al
       SHM_FREE_MB=$(df -m /dev/shm 2>/dev/null | awk 'NR==2 {print $4}')
       if [[ -z "$SHM_FREE_MB" || "$SHM_FREE_MB" -lt "$RAM_LIMIT_MB" ]]; then
         echo "[YT-TOOLKIT] RAM'de yeterli alan yok, SSD'ye (/tmp) geçiliyor."
@@ -273,8 +275,8 @@ if [[ "$PLAY" -eq 1 ]]; then
     }
     trap cleanup INT TERM EXIT
     
-    PLAY_ARGS=(-f "$PLAY_FORMAT" --merge-output-format mkv "${SPON_ARGS[@]}" -o "$TEMP_FILE" "$URL")
-    yt-dlp "${PLAY_ARGS[@]}" 2>/dev/null
+    PLAY_ARGS=(-f "$PLAY_FORMAT" --merge-output-format mkv "${SPON_ARGS[@]}" "${JS_RUNTIME_ARGS[@]}" -o "$TEMP_FILE" "$URL")
+    yt-dlp "${PLAY_ARGS[@]}"
     
     if [[ ! -f "$TEMP_FILE" ]]; then
       echo "hata=video indirilemedi" >&2
@@ -325,7 +327,7 @@ else
   ARGS+=(-f "bestvideo[height<=$MAX_HEIGHT]+bestaudio/best[height<=$MAX_HEIGHT]/best")
 fi
 
-# KODLAMA AYARLARI
+# KODLAMA
 if [[ "$SOUND_M4A" -eq 0 && "$SOUND_OPUS" -eq 0 ]]; then
   if [[ "$LOW" -eq 1 ]]; then
     ARGS+=(--recode-video mp4 --postprocessor-args "ffmpeg:-c:v libx264 -crf 26 -preset fast -threads $THREADS -vf scale=min($LOW_HEIGHT,iw):-2,fps=30 -c:a aac -b:a 96k -ac 2 -ar 48000 -movflags +faststart")
@@ -334,7 +336,7 @@ if [[ "$SOUND_M4A" -eq 0 && "$SOUND_OPUS" -eq 0 ]]; then
   fi
 fi
 
-# DOSYA ISIMLENDIRME VE DUPLICATE KONTROLU
+# DOSYA ISIMLENDIRME VE DUPLICATE
 VID_ID=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" --print "%(id)s" --skip-download "$URL" 2>/dev/null)
 if [[ -n "$VID_ID" ]]; then
   for old_file in "$OUTPUT_DIR"/*"$VID_ID"*; do
