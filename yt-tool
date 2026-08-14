@@ -39,7 +39,7 @@ for rt in deno node bun; do
     if command -v "$rt" &> /dev/null; then
         JS_RUNTIME="$rt"
         RT_PATH=$(command -v "$rt")
-        JS_RUNTIME_ARGS=(--js-runtimes "$rt:$RT_PATH")
+        JS_RUNTIME_ARGS=(--js-runtimes "$rt:$RT_PATH" --extractor-args "youtube:player_client=web_embedded")
         break
     fi
 done
@@ -191,7 +191,7 @@ if [[ "$PLAY" -eq 1 ]]; then
   echo "[YT-TOOLKIT] video hazırlanıyor"
   
   if [[ "$PLAY_SOUND" -eq 1 ]]; then
-    PLAY_FORMAT="bestaudio/best"
+    PLAY_FORMAT="bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best"
   elif [[ "$PLAY_VIDEO" -eq 1 ]]; then
     PLAY_FORMAT="bestvideo[vcodec^=avc1][height<=$MAX_HEIGHT]/best"
   else
@@ -217,7 +217,7 @@ if [[ "$PLAY" -eq 1 ]]; then
 
   # AUTO MOD
   if [[ "$CACHE_MODE" == "auto" ]]; then
-    VID_SIZE=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" -O "%(filesize_approx)s" --skip-download "$URL" 2>/dev/null)
+VID_SIZE=$(yt-dlp "${JS_RUNTIME_ARGS[@]}" --no-warnings -O "%(filesize_approx)s" --skip-download "$URL" 2>/dev/null)
     if [[ -z "$VID_SIZE" || "$VID_SIZE" == "NA" ]]; then
       CACHE_MODE="stream"
     else
@@ -233,7 +233,7 @@ if [[ "$PLAY" -eq 1 ]]; then
   # AKIŞ (STREAM) MODU
   if [[ "$CACHE_MODE" == "stream" ]]; then
     echo "[YT-TOOLKIT] stream başladı"
-    PLAY_ARGS=(-f "$PLAY_FORMAT" -N 4 --http-chunk-size 10M --no-post-overwrites -o - "${JS_RUNTIME_ARGS[@]}" --cookies-from-browser firefox)
+    PLAY_ARGS=(-f "$PLAY_FORMAT" -N 4 --http-chunk-size 10M --no-post-overwrites -o - "${JS_RUNTIME_ARGS[@]}" --cookies-from-browser firefox 	--extractor-args "youtube:player_client=tv,web,android")
     [[ "$PLAY_SOUND" -eq 0 && "$PLAY_VIDEO" -eq 0 ]] && PLAY_ARGS+=(--merge-output-format mkv)
     PLAY_ARGS+=("${SPON_ARGS[@]}")
     
@@ -276,7 +276,7 @@ if [[ "$PLAY" -eq 1 ]]; then
     trap cleanup INT TERM EXIT
     
     PLAY_ARGS=(-f "$PLAY_FORMAT" --merge-output-format mkv "${SPON_ARGS[@]}" "${JS_RUNTIME_ARGS[@]}" --cookies-from-browser firefox -o "$TEMP_FILE" "$URL")
-    yt-dlp "${PLAY_ARGS[@]}"
+    yt-dlp "${PLAY_ARGS[@]}" 2>/dev/null
     
     if [[ ! -f "$TEMP_FILE" ]]; then
       echo "hata=video indirilemedi" >&2
@@ -298,7 +298,7 @@ if [[ "$VERBOSE" -eq 1 ]]; then
 else
   ARGS=(--progress --console-title -N "$THREADS" --no-warnings)
 fi
-ARGS+=("${JS_RUNTIME_ARGS[@]}")
+ARGS+=(--extractor-args "youtube:player_client=tv,web,android")
 
 [[ "$SPONSOR" -eq 1 ]] && ARGS+=(--sponsorblock-remove "sponsor,intro,outro,selfpromo,music_offtopic,preview,filler")
 
