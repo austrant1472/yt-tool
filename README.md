@@ -12,7 +12,7 @@ yt-dbl yi daha basit stabil ve optimize hale getirmek için bir yt-dbl aracısı
 
 kurulum
 
-    cd ~/ && git clone https://github.com/berat015801/yt-tool.git && mkdir -p ~/bin && cp yt-tool ~/bin/yt-tool && chmod +x ~/bin/yt-tool && cd ~/
+    cd ~/ && git clone https://github.com/austrant1472/yt-tool.git && mkdir -p ~/bin && cp yt-tool ~/bin/yt-tool && chmod +x ~/bin/yt-tool && cd ~/
 
 
 kurulum
