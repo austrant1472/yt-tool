@@ -1,10 +1,3 @@
-# yt-tool
-yt-dbl yi daha basit stabil ve optimize hale getirmek için bir yt-dbl aracısı
-
-kurulum
-
-    cd ~/ && git clone https://github.com/berat015801/yt-tool.git && mkdir -p ~/bin && cp yt-tool ~/bin/yt-tool && chmod +x ~/bin/yt-tool && cd ~/
-
 bağımlılıklar
 deno/bun (bilgisayar için önerilen js runtime)
 nodejs (termux için önerilen js runtime)
@@ -12,6 +5,25 @@ ffmpeg
 ffplay
 yt-dlb
 (script deno nodejs ve bun dan hangisi sistemde kuruluysa otomatik olarak onu kullanır)
+
+
+# yt-tool
+yt-dbl yi daha basit stabil ve optimize hale getirmek için bir yt-dbl aracısı
+
+kurulum
+
+    cd ~/ && git clone https://github.com/berat015801/yt-tool.git && mkdir -p ~/bin && cp yt-tool ~/bin/yt-tool && chmod +x ~/bin/yt-tool && cd ~/
+
+
+kurulum
+
+    deno/bun (bilgisayar için önerilen js runtime)
+    nodejs (termux için önerilen js runtime)
+    ffmpeg
+    ffplay
+    yt-dlb
+    (script deno nodejs ve bun dan hangisi sistemde kuruluysa otomatik olarak onu kullanır)
+    
 
 optimizasyon ve stabilite algoritmaları
 
