@@ -6,7 +6,7 @@ kurulum
     cd ~/ && git clone https://github.com/austrant1472/yt-tool.git && mkdir -p ~/bin && cp yt-tool ~/bin/yt-tool && chmod +x ~/bin/yt-tool && cd ~/
 
 
-kurulum
+bağımlılıklar
 
     deno/bun (bilgisayar için önerilen js runtime)
     nodejs (termux için önerilen js runtime)
