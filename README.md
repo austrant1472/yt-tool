@@ -1,12 +1,3 @@
-bağımlılıklar
-deno/bun (bilgisayar için önerilen js runtime)
-nodejs (termux için önerilen js runtime)
-ffmpeg
-ffplay
-yt-dlb
-(script deno nodejs ve bun dan hangisi sistemde kuruluysa otomatik olarak onu kullanır)
-
-
 # yt-tool
 yt-dbl yi daha basit stabil ve optimize hale getirmek için bir yt-dbl aracısı
 
